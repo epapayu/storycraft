@@ -1,6 +1,6 @@
 export const LLM_OPTIONS = [
     {
-        label: "Gemini 3.1   Pro Preview",
+        label: "Gemini 3.1 Pro Preview",
         modelName: "gemini-3.1-pro-preview",
         thinkingBudget: 0,
     },
@@ -44,6 +44,14 @@ export const VIDEO_MODEL_OPTIONS = [
         label: "Veo 3.1",
         modelName: "veo-3.1-generate-001",
     },
+    {
+        label: "Veo 3.0 Fast",
+        modelName: "veo-3.0-fast-generate-001",
+    },
+    {
+        label: "Veo 3.0",
+        modelName: "veo-3.0-generate-001",
+    },
 ] as const;
 
 export const VIDEO_RESOLUTION_OPTIONS = [
@@ -78,3 +86,4 @@ export const DEFAULT_SETTINGS: Settings = {
     videoResolution: "1080p",
     generateAudio: false,
 };
+

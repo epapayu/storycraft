@@ -33,8 +33,8 @@ export const IMAGE_MODEL_OPTIONS = [
 
 export const VIDEO_MODEL_OPTIONS = [
     {
-        label: "Veo 3.0 Lite",
-        modelName: "veo-3.0-lite-generate-001",
+        label: "Veo 3.1 Lite",
+        modelName: "veo-3.1-lite-generate-001",
     },
     {
         label: "Veo 3.1 Fast",

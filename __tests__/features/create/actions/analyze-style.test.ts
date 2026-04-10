@@ -47,7 +47,7 @@ describe("analyzeStyleImageAction", () => {
                 }),
             ]),
             expect.objectContaining({ responseMimeType: "text/plain" }),
-            "gemini-2.5-flash",
+            "gemini-3-flash-preview",
         );
     });
 

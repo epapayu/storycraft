@@ -40,20 +40,15 @@ export async function generateContent(
     },
     model: string = DEFAULT_SETTINGS.llmModel,
 ): Promise<string | undefined> {
-    logger.debug("Generate content : " + model);
-    if (
-        model === "gemini-3-pro-preview" ||
-        model === "gemini-3-flash-preview"
-    ) {
-        config = {
-            ...config,
-            thinkingConfig: {
-                // includeThoughts: true,
-                thinkingLevel: ThinkingLevel.LOW,
-            },
-            responseMimeType: config.responseMimeType,
-        };
-    }
+    
+    config = {
+        ...config,
+        thinkingConfig: {
+            // includeThoughts: true,
+            thinkingLevel: ThinkingLevel.LOW,
+        },
+        responseMimeType: config.responseMimeType,
+    };
 
     const useSearchAndBrowser = false;
     if (useSearchAndBrowser) {

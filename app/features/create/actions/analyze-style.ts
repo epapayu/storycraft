@@ -34,7 +34,7 @@ export async function analyzeStyleImageAction(
         const description = await generateContent(
             prompt,
             { responseMimeType: "text/plain" },
-            "gemini-2.5-flash",
+            "gemini-3-flash-preview",
         );
 
         if (!description) {

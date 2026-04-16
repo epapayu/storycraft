@@ -1,6 +1,6 @@
 "use server";
 
-import { generateMusicRest } from "@/lib/api/lyria";
+import { generateMusic as generateMusicApi } from "@/lib/api/gemini";
 import logger from "@/app/logger";
 import { generateMusicSchema } from "@/app/schemas";
 import { requireAuth } from "@/lib/api/auth-utils";
@@ -15,13 +15,18 @@ export async function generateMusic(prompt: string): Promise<string> {
     );
     logger.debug("Generating music");
     try {
-        const musicUrl = await generateMusicRest(prompt);
+        const response = await generateMusicApi(prompt);
+        if (!response.success || !response.audioGcsUri) {
+            throw new Error(
+                response.errorMessage || "Failed to generate music",
+            );
+        }
         logger.debug("Music generated!");
-        return musicUrl;
+        return response.audioGcsUri;
     } catch (error) {
         logger.error("Error generating music:", error);
         throw new Error(
-            `Failed to music: ${error instanceof Error ? error.message : "Unknown error"}`,
+            `Failed to generate music: ${error instanceof Error ? error.message : "Unknown error"}`,
         );
     }
 }

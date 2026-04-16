@@ -1,6 +1,6 @@
 "use server";
 
-import { tts } from "@/lib/api/tts";
+import { generateSpeech } from "@/lib/api/gemini";
 import { Language } from "@/app/types";
 import logger from "@/app/logger";
 import { generateVoiceoverSchema } from "@/app/schemas";
@@ -29,15 +29,23 @@ export async function generateVoiceover(
     try {
         const speachAudioFiles = await Promise.all(
             scenes.map(async (scene) => {
-                const filename = await tts(
+                const result = await generateSpeech(
                     scene.voiceover,
                     language.code,
                     voiceName,
                 );
-                return { filename, text: scene.voiceover };
+
+                if (!result.success || !result.audioGcsUri) {
+                    throw new Error(
+                        result.errorMessage || "Failed to generate speech",
+                    );
+                }
+
+                return { filename: result.audioGcsUri, text: scene.voiceover };
             }),
         );
         const voiceoverAudioUrls = speachAudioFiles.map((r) => r.filename);
+        logger.debug(`Generated voiceover audio URLs: ${voiceoverAudioUrls}`);
         return voiceoverAudioUrls;
     } catch (error) {
         logger.error("Error generating voiceover:", error);

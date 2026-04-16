@@ -648,6 +648,59 @@ export async function exportMovie(
 }
 
 /**
+ * Converts raw PCM audio data to MP3 format.
+ * Gemini models (like TTS or native audio) return raw 16-bit PCM at 24kHz little-endian.
+ *
+ * @param pcmBuffer The raw PCM audio data.
+ * @param sampleRate The sample rate of the PCM data (default: 24000).
+ * @param numChannels The number of channels (default: 1 for mono).
+ * @returns A Promise that resolves with the MP3 audio data as a Buffer.
+ */
+export async function convertPcmToMp3(
+    pcmBuffer: Buffer,
+    sampleRate: number = 24000,
+    numChannels: number = 1,
+): Promise<Buffer> {
+    const id = uuidv4();
+    const tempDir = await fs.promises.mkdtemp(
+        path.join(os.tmpdir(), `pcm-to-mp3-${id}-`),
+    );
+    const pcmPath = path.join(tempDir, "input.raw");
+    const mp3Path = path.join(tempDir, "output.mp3");
+
+    try {
+        await fs.promises.writeFile(pcmPath, pcmBuffer);
+
+        await new Promise<void>((resolve, reject) => {
+            ffmpeg(pcmPath)
+                .inputOptions([
+                    "-f s16le",
+                    `-ar ${sampleRate}`,
+                    `-ac ${numChannels}`,
+                ])
+                .outputOptions(["-c:a libmp3lame", "-q:a 2"])
+                .on("start", (commandLine) => {
+                    logger.debug("FFmpeg PCM to MP3 command:", commandLine);
+                })
+                .on("error", (err, stdout, stderr) => {
+                    logger.error("FFmpeg error during PCM to MP3 conversion:", err);
+                    logger.error(`FFmpeg stderr: ${stderr}`);
+                    reject(err);
+                })
+                .on("end", () => {
+                    logger.debug("PCM to MP3 conversion completed");
+                    resolve();
+                })
+                .save(mp3Path);
+        });
+
+        return await fs.promises.readFile(mp3Path);
+    } finally {
+        await fs.promises.rm(tempDir, { recursive: true, force: true });
+    }
+}
+
+/**
  * Concatenates a music audio buffer twice with a fade-out/fade-in transition,
  * and returns the resulting audio buffer.
  *

@@ -11,6 +11,8 @@ import logger from "@/app/logger";
 import { env } from "@/lib/utils/env";
 import { DEFAULT_SETTINGS } from "@/lib/ai-config";
 import { withRetry } from "@/lib/utils/retry";
+import { uploadBufferToGcs } from "@/lib/utils/storage-utils";
+import { convertPcmToMp3 } from "@/lib/utils/ffmpeg";
 
 const PROJECT_ID = env.PROJECT_ID;
 
@@ -68,6 +70,130 @@ interface GenerateNanoBananaImageResponse {
     success: boolean;
     imageGcsUri?: string;
     errorMessage?: string;
+}
+
+interface GenerateMusicResponse {
+    success: boolean;
+    audioGcsUri?: string;
+    errorMessage?: string;
+}
+
+export async function generateSpeech(
+    text: string,
+    language: string,
+    voiceName?: string,
+): Promise<GenerateMusicResponse> {
+    logger.debug(`Generating speech for text: ${text}`);
+    logger.debug(`Language: ${language}`);
+    logger.debug(`Voice Name: ${voiceName}`);
+    return withRetry(
+        async () => {
+            const response = await ai.models.generateContent({
+                model: "gemini-3.1-flash-tts-preview",
+                config: {
+                    responseModalities: ["AUDIO"],
+                    speechConfig: {
+                        voiceConfig: {
+                            prebuiltVoiceConfig: {
+                                voiceName: voiceName,
+                            },
+                        },
+                        languageCode: language,
+                    },
+                },
+                contents: text,
+            });
+
+            // Process the response to find and save the generated image
+            if (!response.candidates || response.candidates.length === 0) {
+                logger.warn("No candidates found in the response.");
+                // If no candidates, but no error, it might be a valid (empty) response, so break retry loop.
+                return {
+                    success: false,
+                    errorMessage: "No candidates found in the response.",
+                };
+            }
+
+            const firstCandidate = response.candidates[0];
+            let audioGcsUri;
+            for (const part of firstCandidate.content!.parts!) {
+                if (part.inlineData) {
+                    const pcmBuffer = Buffer.from(
+                        part.inlineData!.data!,
+                        "base64",
+                    );
+                    const audioBuffer = await convertPcmToMp3(pcmBuffer);
+                    const uuid = uuidv4();
+                    audioGcsUri = await uploadBufferToGcs(
+                        audioBuffer,
+                        `audio-${uuid}.mp3`,
+                        "audio/mpeg",
+                    );
+                    return { success: true, audioGcsUri: audioGcsUri! };
+                }
+            }
+
+            // If we reach here, no inlineData (audio) was found
+            return {
+                success: false,
+                errorMessage:
+                    response.text || "No audio data found in response.",
+            };
+        },
+        { maxRetries: 1 },
+    );
+}
+
+export async function generateMusic(
+    prompt: string,
+): Promise<GenerateMusicResponse> {
+    return withRetry(
+        async () => {
+            const response = await ai.models.generateContent({
+                model: "lyria-3-pro-preview",
+                config: {
+                    responseModalities: ["AUDIO", "TEXT"],
+                },
+                contents: prompt,
+            });
+
+            // Process the response to find and save the generated image
+            if (!response.candidates || response.candidates.length === 0) {
+                logger.warn("No candidates found in the response.");
+                // If no candidates, but no error, it might be a valid (empty) response, so break retry loop.
+                return {
+                    success: false,
+                    errorMessage: "No candidates found in the response.",
+                };
+            }
+
+            const firstCandidate = response.candidates[0];
+            let audioGcsUri;
+            for (const part of firstCandidate.content!.parts!) {
+                if (part.inlineData) {
+                    const audioBuffer = Buffer.from(
+                        part.inlineData!.data!,
+                        "base64",
+                    );
+                    const uuid = uuidv4();
+                    audioGcsUri = await uploadBufferToGcs(
+                        audioBuffer,
+                        `music-${uuid}.mp3`,
+                        "audio/mpeg",
+                    );
+                    return { success: true, audioGcsUri: audioGcsUri! };
+                }
+            }
+
+            // If we reach here, no inlineData (audio) was found
+            return {
+                success: false,
+                errorMessage:
+                    response.text || "No audio data found in response.",
+            };
+        },
+        { maxRetries: 1 },
+    );
 }
 
 export async function generateImage(

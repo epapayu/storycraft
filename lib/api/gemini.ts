@@ -40,7 +40,6 @@ export async function generateContent(
     },
     model: string = DEFAULT_SETTINGS.llmModel,
 ): Promise<string | undefined> {
-    
     config = {
         ...config,
         thinkingConfig: {

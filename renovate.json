@@ -1,0 +1,114 @@
+{
+    "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+    "extends": [
+        "config:recommended",
+        ":dependencyDashboard",
+        ":semanticCommits",
+        ":maintainLockFilesWeekly"
+    ],
+    "timezone": "Europe/Paris",
+    "schedule": ["before 6am"],
+    "prConcurrentLimit": 10,
+    "prHourlyLimit": 4,
+    "rangeStrategy": "bump",
+    "rebaseWhen": "conflicted",
+    "labels": ["dependencies"],
+    "packageRules": [
+        {
+            "description": "Group all non-major updates and auto-merge if CI passes",
+            "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+            "groupName": "all non-major dependencies",
+            "automerge": true,
+            "platformAutomerge": true
+        },
+        {
+            "description": "Major updates — one PR per package, manual review",
+            "matchUpdateTypes": ["major"],
+            "automerge": false,
+            "labels": ["dependencies", "major-update"]
+        },
+        {
+            "description": "Google Cloud & AI SDKs — batch weekly",
+            "matchPackagePatterns": ["^@google-cloud/", "^@google/genai"],
+            "groupName": "Google Cloud & AI",
+            "schedule": ["before 6am on monday"]
+        },
+        {
+            "description": "Next.js Ecosystem",
+            "matchPackageNames": ["next", "next-auth", "next-themes"],
+            "groupName": "Next.js framework"
+        },
+        {
+            "description": "UI/UX & Styling",
+            "matchPackagePatterns": [
+                "^@radix-ui/",
+                "^framer-motion",
+                "^lucide-react",
+                "^tailwindcss",
+                "^@tailwindcss/",
+                "^class-variance-authority",
+                "^clsx",
+                "^tailwind-merge",
+                "^tailwindcss-animate",
+                "^cmdk",
+                "^sonner"
+            ],
+            "groupName": "UI & Styling"
+        },
+        {
+            "description": "Media Pipeline",
+            "matchPackageNames": ["sharp", "fluent-ffmpeg", "mediabunny"],
+            "groupName": "media pipeline"
+        },
+        {
+            "description": "Data Fetching & State",
+            "matchPackagePatterns": [
+                "^@tanstack/react-query",
+                "^zustand",
+                "^zod"
+            ],
+            "groupName": "state & data"
+        },
+        {
+            "description": "Types packages — safe to batch and auto-merge",
+            "matchPackagePatterns": ["^@types/"],
+            "groupName": "type definitions",
+            "automerge": true,
+            "platformAutomerge": true
+        },
+        {
+            "description": "Tooling & Testing",
+            "matchPackageNames": [
+                "eslint",
+                "prettier",
+                "typescript",
+                "vitest",
+                "@vitejs/plugin-react",
+                "jsdom",
+                "@playwright/test"
+            ],
+            "matchUpdateTypes": ["minor", "patch"],
+            "groupName": "tooling",
+            "automerge": true,
+            "platformAutomerge": true
+        },
+        {
+            "description": "Pin GitHub Actions to SHAs for supply-chain safety",
+            "matchManagers": ["github-actions"],
+            "pinDigests": true
+        }
+    ],
+    "vulnerabilityAlerts": {
+        "labels": ["security"],
+        "automerge": true,
+        "platformAutomerge": true,
+        "schedule": ["at any time"]
+    },
+    "lockFileMaintenance": {
+        "enabled": true,
+        "automerge": true,
+        "platformAutomerge": true,
+        "schedule": ["before 6am on monday"]
+    },
+    "postUpdateOptions": ["npmDedupe"]
+}

@@ -44,3 +44,28 @@ vi.mock("next-auth", () => {
         }),
     };
 });
+
+// Mock @google/genai
+vi.mock("@google/genai", async (importOriginal) => {
+    const actual = (await importOriginal()) as Record<string, unknown>;
+    return {
+        ...actual,
+        GoogleGenAI: vi.fn().mockImplementation(function (
+            this: Record<string, unknown>,
+        ) {
+            this.models = {
+                generateContent: vi.fn().mockResolvedValue({
+                    text: "mocked response",
+                    candidates: [
+                        { content: { parts: [{ text: "mocked response" }] } },
+                    ],
+                }),
+                upscaleImage: vi.fn().mockResolvedValue({
+                    generatedImages: [
+                        { image: { gcsUri: "gs://mock/image.png" } },
+                    ],
+                }),
+            };
+        }),
+    };
+});

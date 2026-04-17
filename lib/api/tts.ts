@@ -10,11 +10,18 @@ const globalForTTS = global as unknown as {
     client: InstanceType<typeof textToSpeech.TextToSpeechClient>;
 };
 
-// Assuming you're using Google Cloud Text-to-Speech:
-const client = globalForTTS.client || new textToSpeech.TextToSpeechClient();
+function getTTSClient() {
+    if (globalForTTS.client) {
+        return globalForTTS.client;
+    }
 
-if (process.env.NODE_ENV !== "production") {
-    globalForTTS.client = client;
+    const client = new textToSpeech.TextToSpeechClient();
+
+    if (process.env.NODE_ENV !== "production") {
+        globalForTTS.client = client;
+    }
+
+    return client;
 }
 
 // Simple in-memory cache for voices: Map<languageCode, { voices: IVoice[], timestamp: number }>
@@ -28,6 +35,7 @@ export async function tts(
     language: string,
     voiceName?: string,
 ): Promise<string> {
+    const client = getTTSClient();
     const listVoicesRequest: protos.google.cloud.texttospeech.v1.IListVoicesRequest =
         {
             languageCode: language,

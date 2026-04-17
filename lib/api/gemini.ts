@@ -19,16 +19,22 @@ const PROJECT_ID = env.PROJECT_ID;
 // Use a global variable to ensure the client is reused across HMR in development
 const globalForAI = global as unknown as { ai: GoogleGenAI };
 
-const ai =
-    globalForAI.ai ||
-    new GoogleGenAI({
+function getAiClient() {
+    if (globalForAI.ai) {
+        return globalForAI.ai;
+    }
+
+    const ai = new GoogleGenAI({
         vertexai: true,
         project: PROJECT_ID,
         location: "global",
     });
 
-if (process.env.NODE_ENV !== "production") {
-    globalForAI.ai = ai;
+    if (process.env.NODE_ENV !== "production") {
+        globalForAI.ai = ai;
+    }
+
+    return ai;
 }
 
 export async function generateContent(
@@ -42,6 +48,7 @@ export async function generateContent(
     },
     model: string = DEFAULT_SETTINGS.llmModel,
 ): Promise<string | undefined> {
+    const ai = getAiClient();
     config = {
         ...config,
         thinkingConfig: {
@@ -83,6 +90,7 @@ export async function generateSpeech(
     language: string,
     voiceName?: string,
 ): Promise<GenerateMusicResponse> {
+    const ai = getAiClient();
     logger.debug(`Generating speech for text: ${text}`);
     logger.debug(`Language: ${language}`);
     logger.debug(`Voice Name: ${voiceName}`);
@@ -147,6 +155,7 @@ export async function generateSpeech(
 export async function generateMusic(
     prompt: string,
 ): Promise<GenerateMusicResponse> {
+    const ai = getAiClient();
     return withRetry(
         async () => {
             const response = await ai.models.generateContent({
@@ -203,6 +212,7 @@ export async function generateImage(
     },
     model: string = DEFAULT_SETTINGS.imageModel,
 ): Promise<GenerateNanoBananaImageResponse> {
+    const ai = getAiClient();
     logger.debug(JSON.stringify(prompt, null, 2));
 
     return withRetry(
@@ -268,6 +278,7 @@ export async function upscaleImage(
     },
     model: string = "imagen-4.0-upscale-preview",
 ): Promise<GenerateNanoBananaImageResponse> {
+    const ai = getAiClient();
     return withRetry(
         async () => {
             logger.debug("Upscale Image : " + model);

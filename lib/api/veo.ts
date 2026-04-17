@@ -8,16 +8,22 @@ const PROJECT_ID = env.PROJECT_ID;
 // Use a global variable to ensure the client is reused across HMR in development
 const globalForAI = global as unknown as { ai: GoogleGenAI };
 
-const ai =
-    globalForAI.ai ||
-    new GoogleGenAI({
+function getAiClient() {
+    if (globalForAI.ai) {
+        return globalForAI.ai;
+    }
+
+    const ai = new GoogleGenAI({
         vertexai: true,
         project: PROJECT_ID,
         location: "global",
     });
 
-if (process.env.NODE_ENV !== "production") {
-    globalForAI.ai = ai;
+    if (process.env.NODE_ENV !== "production") {
+        globalForAI.ai = ai;
+    }
+
+    return ai;
 }
 
 async function delay(ms: number) {
@@ -33,6 +39,7 @@ export async function generateSceneVideo(
     durationSeconds: number = 8,
     resolution: string = "1080p",
 ): Promise<GenerateVideosResponse> {
+    const ai = getAiClient();
     const modifiedPrompt = prompt + "\nSubtitles: off";
     logger.debug(
         `generateSceneVideo {model: ${model}, prompt: ${modifiedPrompt}, resolution: ${resolution}}`,

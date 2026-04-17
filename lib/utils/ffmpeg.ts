@@ -683,7 +683,10 @@ export async function convertPcmToMp3(
                     logger.debug("FFmpeg PCM to MP3 command:", commandLine);
                 })
                 .on("error", (err, stdout, stderr) => {
-                    logger.error("FFmpeg error during PCM to MP3 conversion:", err);
+                    logger.error(
+                        "FFmpeg error during PCM to MP3 conversion:",
+                        err,
+                    );
                     logger.error(`FFmpeg stderr: ${stderr}`);
                     reject(err);
                 })

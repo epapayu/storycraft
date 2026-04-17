@@ -1,11 +1,13 @@
 import {
     AudioBufferSource,
+    AudioCodec,
     AudioEncodingConfig,
     BufferTarget,
     CanvasSink,
     CanvasSource,
     Input,
     Mp4OutputFormat,
+    WebMOutputFormat,
     Output,
     UrlSource,
     VideoEncodingConfig,
@@ -18,6 +20,37 @@ import { clientLogger } from "@/lib/utils/client-logger";
 const FPS = 30;
 const WIDTH = 1920;
 const HEIGHT = 1080;
+const SAMPLE_RATE = 44100;
+
+/**
+ * Checks if a specific audio configuration is supported by the browser.
+ */
+async function isAudioConfigSupported(
+    codec: string,
+    sampleRate: number,
+    numberOfChannels: number,
+    bitrate: number,
+): Promise<boolean> {
+    if (
+        typeof AudioEncoder === "undefined" ||
+        !AudioEncoder.isConfigSupported
+    ) {
+        return false;
+    }
+
+    try {
+        const result = await AudioEncoder.isConfigSupported({
+            codec,
+            sampleRate,
+            numberOfChannels,
+            bitrate,
+        });
+        return !!result.supported;
+    } catch (error) {
+        clientLogger.warn(`Check for ${codec} support failed:`, error);
+        return false;
+    }
+}
 
 export async function exportVideoClient(
     layers: TimelineLayer[],
@@ -25,19 +58,46 @@ export async function exportVideoClient(
 ): Promise<Blob> {
     clientLogger.info("Starting client-side export...");
 
-    // 1. Initialize Output with BufferTarget (MP4)
+    // 1. Determine Output Format and Audio Codec
+    let audioCodec: AudioCodec = "aac";
+    let outputFormat: Mp4OutputFormat | WebMOutputFormat =
+        new Mp4OutputFormat();
+    let mimeType = "video/mp4";
+
+    // Standard AAC LC codec string for WebCodecs
+    const AAC_CODEC = "mp4a.40.2";
+
+    const aacSupported = await isAudioConfigSupported(
+        AAC_CODEC,
+        SAMPLE_RATE,
+        2,
+        128_000,
+    );
+
+    if (!aacSupported) {
+        clientLogger.warn(
+            "AAC encoding not supported by this browser. Falling back to Opus and WebM.",
+        );
+        audioCodec = "opus";
+        outputFormat = new WebMOutputFormat();
+        mimeType = "video/webm";
+    }
+
+    // 2. Initialize Output with BufferTarget
     const target = new BufferTarget();
     const output = new Output({
-        format: new Mp4OutputFormat(),
+        format: outputFormat,
         target: target,
     });
 
-    // 2. Setup Video Track
+    // 3. Setup Video Track
     // Create an OffscreenCanvas for drawing frames
     const canvas = new OffscreenCanvas(WIDTH, HEIGHT);
     const ctx = canvas.getContext("2d")!;
 
     // Video Encoding Config (H.264)
+    // Note: If on Firefox, H.264 might also be unsupported for encoding.
+    // For now we focus on the reported audio error.
     const videoConfig: VideoEncodingConfig = {
         codec: "avc", // H.264
         bitrate: 5_000_000, // 5 Mbps
@@ -46,23 +106,19 @@ export async function exportVideoClient(
     const canvasSource = new CanvasSource(canvas, videoConfig);
     output.addVideoTrack(canvasSource);
 
-    // 3. Setup Audio Track
-    // We will mix all audio logic using OfflineAudioContext, then add as a single track
+    // 4. Setup Audio Track
     const audioConfig: AudioEncodingConfig = {
-        codec: "aac", // AAC LC
+        codec: audioCodec,
         bitrate: 128_000,
     };
 
-    // We need to mix audio before adding the tracksource, usually.
-    // But AudioBufferSource takes an AudioBuffer.
-    // We will compute the mixed AudioBuffer and feed it.
     const audioSource = new AudioBufferSource(audioConfig);
     output.addAudioTrack(audioSource);
 
-    // 4. Start Output
+    // 5. Start Output
     await output.start();
 
-    // 5. Compute Duration
+    // 6. Compute Duration
     // Find max duration from layers
     let duration = 0;
     layers.forEach((layer) => {
@@ -74,10 +130,12 @@ export async function exportVideoClient(
 
     clientLogger.info(`Export duration: ${duration}s`);
 
-    // 6. Process Audio (Mix to AudioBuffer)
-    // We need to load all audio inputs first to decode them.
-    // Actually, UrlSource + AudioContext decodeAudioData is easier.
-    const audioContext = new OfflineAudioContext(2, duration * 48000, 48000);
+    // 7. Process Audio (Mix to AudioBuffer)
+    const audioContext = new OfflineAudioContext(
+        2,
+        Math.ceil(duration * SAMPLE_RATE),
+        SAMPLE_RATE,
+    );
 
     // Helper to load audio buffer
     const loadAudioBuffer = async (
@@ -86,8 +144,6 @@ export async function exportVideoClient(
         try {
             const response = await fetch(url);
             const arrayBuffer = await response.arrayBuffer();
-            // We need a temp audio context to decode if we weren't in OfflineContext?
-            // OfflineAudioContext can decode too via decodeAudioData
             return await audioContext.decodeAudioData(arrayBuffer);
         } catch {
             clientLogger.error("Failed to load audio:", url);
@@ -109,7 +165,6 @@ export async function exportVideoClient(
 
                     // Handle trimming if metadata exists
                     const startTime = item.startTime;
-                    // Trim Logic:
                     const offset =
                         typeof item.metadata?.trimStart === "number"
                             ? item.metadata.trimStart
@@ -143,8 +198,7 @@ export async function exportVideoClient(
     // Add Audio to Source
     await audioSource.add(mixedAudioBuffer);
 
-    // 7. Process Video (Frame by Frame)
-    // We need to load Video Inputs
+    // 8. Process Video (Frame by Frame)
     const videoLayer = layers.find((l) => l.type === "video");
     const videoInputs = new Map<string, { input: Input; sink: CanvasSink }>();
 
@@ -173,7 +227,6 @@ export async function exportVideoClient(
 
     // Render Loop
     const dt = 1 / FPS;
-    // Iterate strictly by frame count to avoid float drift issues potentially
     const totalFrames = Math.ceil(duration * FPS);
 
     for (let i = 0; i < totalFrames; i++) {
@@ -198,8 +251,6 @@ export async function exportVideoClient(
         if (activeClip && videoInputs.has(activeClip.id)) {
             const { sink } = videoInputs.get(activeClip.id)!;
 
-            // Calculate time within clip
-            // Account for trimStart
             const offset =
                 typeof activeClip.metadata?.trimStart === "number"
                     ? activeClip.metadata.trimStart
@@ -209,18 +260,14 @@ export async function exportVideoClient(
             try {
                 const wrapped = await sink.getCanvas(clipTime);
                 if (wrapped && wrapped.canvas) {
-                    // Draw to main canvas
-                    // Handle aspect ratio? Assuming fit or stretch.
-                    // drawImage(image, dx, dy, dWidth, dHeight)
                     ctx.drawImage(wrapped.canvas, 0, 0, WIDTH, HEIGHT);
                 }
             } catch {
-                // console.warn('Frame fetch failed');
+                // ignore
             }
         }
 
         // Add frame to output
-        // timestamp, duration
         await canvasSource.add(time, dt);
     }
 
@@ -240,5 +287,5 @@ export async function exportVideoClient(
         throw new Error("Export failed: No buffer produced");
     }
 
-    return new Blob([target.buffer], { type: "video/mp4" });
+    return new Blob([target.buffer], { type: mimeType });
 }

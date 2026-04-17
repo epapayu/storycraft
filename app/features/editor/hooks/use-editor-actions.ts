@@ -24,11 +24,12 @@ export function useEditorActions() {
                 setExportProgress(progress);
             });
             const videoUrl = URL.createObjectURL(blob);
+            const extension = blob.type === "video/webm" ? "webm" : "mp4";
 
             // Download immediately
             const a = document.createElement("a");
             a.href = videoUrl;
-            a.download = `storycraft-${new Date().toISOString()}.mp4`;
+            a.download = `storycraft-${new Date().toISOString()}.${extension}`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);

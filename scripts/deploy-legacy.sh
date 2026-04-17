@@ -3,7 +3,7 @@
 # Configuration
 PROJECT_ID="svc-demo-vertex"
 REGION="us-central1"
-SERVICE="storycraft"
+SERVICE="storycraftv3"
 IMAGE_URI="us-central1-docker.pkg.dev/$PROJECT_ID/vertexai/$SERVICE:v1"
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"

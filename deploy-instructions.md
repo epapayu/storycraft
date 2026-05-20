@@ -65,10 +65,15 @@ This guide will help you deploy the StoryCraft application to Google Cloud Platf
     - CORS enabled for web access
     - Lifecycle rule: 30-day retention
     - Uniform bucket-level access
+    - Structured namespacing: Uploaded media assets are partitioned under `projectId` namespaces (e.g., `gs://[bucket]/[projectId]/media/`) to ensure strict organizational boundaries during team collaborations.
 
 4. **Firestore Database**: `storycraft-db`
     - Native mode
-    - Composite index on scenarios collection (userId ASC, updatedAt DESC)
+    - Composite index on `scenarios` collection (`userId` ASC, `updatedAt` DESC) for legacy users
+    - Composite index on `scenarios` collection (`projectId` ASC, `updatedAt` DESC) for team workspaces
+    - Composite index on `timelines` collection (`userId` ASC, `scenarioId` ASC) for legacy users
+    - Composite index on `timelines` collection (`projectId` ASC, `scenarioId` ASC) for team workspaces
+
 
 5. **Artifact Registry**: `storycraft` repository for Docker images
 
@@ -121,62 +126,47 @@ openssl rand -base64 32
 
 ## Deployment Process
 
-### 1. Initial Infrastructure Setup
+### 1. Unified Infrastructure & Application Deploy
+The entire deployment pipeline (enabling APIs, provisioning buckets and databases, building the container via Google Cloud Build, and hosting on Cloud Run) is fully automated and handled in a single run without any local Docker dependencies!
 
 ```bash
+# 1. Navigate to the terraform directory
 cd terraform
+
+# 2. Initialize Terraform
 terraform init
+
+# 3. Review execution plan
 terraform plan
+
+# 4. Deploy everything
 terraform apply
 ```
 
-### 2. Build and Push Docker Image
+---
+
+### Updating the Application (Software Updates)
+
+Google Cloud Run services cache container image digests. If you perform Next.js application updates (e.g., modifying files in `app/` or `lib/`) without altering the root `Dockerfile`, the Dockerfile's content hash remains identical. Consequently, running a standard `terraform apply` will *not* trigger a Cloud Run redeployment.
+
+To force-compile your code updates and redeploy them to your live service, execute:
 
 ```bash
-# Get registry URI
-REGISTRY_URI=$(terraform output -raw container_image_uri)
+# 1. Taint the build resource to mark it for re-compilation
+terraform taint null_resource.docker_build_and_push
 
-# Build image
-docker build -t $REGISTRY_URI/storycraft:latest ..
-
-# Configure Docker
-gcloud auth configure-docker us-central1-docker.pkg.dev
-
-# Push image
-docker push $REGISTRY_URI/storycraft:latest
+# 2. Trigger a Cloud Run service redeployment to pull the fresh container digest
+terraform apply -replace="google_cloud_run_v2_service.storycraft_service"
 ```
 
-### 3. Update Configuration
-
-Update `terraform.tfvars` with:
-
-- Actual container image URI
-- Cloud Run service URL for NextAuth
-
-### 4. Final Deployment
-
+*(Alternatively, you can trigger a direct Cloud Run revision update from your terminal using gcloud:)*
 ```bash
-terraform apply
+gcloud run deploy storycraft \
+  --image="us-central1-docker.pkg.dev/YOUR_PROJECT_ID/storycraft/storycraft:c35b8c05" \
+  --region="us-central1" \
+  --project="YOUR_PROJECT_ID"
 ```
 
-## Monitoring and Management
-
-### View Logs
-
-```bash
-gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=storycraft" --limit=50
-```
-
-### Update Application
-
-```bash
-# Build new image
-docker build -t $REGISTRY_URI/storycraft:v2 ..
-docker push $REGISTRY_URI/storycraft:v2
-
-# Update Cloud Run
-gcloud run deploy storycraft --image=$REGISTRY_URI/storycraft:v2 --region=us-central1
-```
 
 ### Scale Service
 

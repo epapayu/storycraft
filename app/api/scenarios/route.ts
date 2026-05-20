@@ -11,6 +11,7 @@ import {
 } from "@/lib/api/response";
 import { withAuth } from "@/lib/api/with-auth";
 import { validateInput } from "@/lib/utils/validation";
+import { verifyScenarioAccess, verifyProjectAccess } from "@/lib/api/ownership";
 
 export const POST = withAuth(async (request, { userId }) => {
     try {
@@ -26,15 +27,22 @@ export const POST = withAuth(async (request, { userId }) => {
             return validation.errorResponse;
         }
 
-        const { scenario, scenarioId } = validation.data;
+        const { scenario, scenarioId, projectId } = validation.data;
+
+        // Verify project access if provided
+        if (projectId) {
+            const hasAccess = await verifyProjectAccess(projectId, userId, "editor");
+            if (!hasAccess) {
+                return forbiddenResponse("Forbidden: You do not have editor access to this project.");
+            }
+        }
 
         // Generate a unique ID if not provided
         const id = scenarioId || firestore.collection("scenarios").doc().id;
 
         // Prepare the scenario data for Firestore (filter out undefined values)
-        const baseScenario = {
+        const baseScenario: Record<string, any> = {
             id,
-            userId,
             name: scenario.name || "",
             pitch: scenario.pitch || "",
             scenario: scenario.scenario || "",
@@ -77,15 +85,23 @@ export const POST = withAuth(async (request, { userId }) => {
             logoOverlay: scenario.logoOverlay || null,
         };
 
+        // Map project association or fallback to personal legacy mapping
+        if (projectId) {
+            baseScenario.projectId = projectId;
+            baseScenario.createdBy = userId;
+        } else {
+            baseScenario.userId = userId;
+        }
+
         const scenarioRef = firestore.collection("scenarios").doc(id);
 
-        await firestore.runTransaction(async (transaction) => {
+        await firestore.runTransaction(async (transaction: any) => {
             const scenarioDoc = await transaction.get(scenarioRef);
 
             if (scenarioDoc.exists) {
-                // Check if user owns this scenario
-                const existingData = scenarioDoc.data();
-                if (existingData?.userId !== userId) {
+                // Verify that user has editor access to existing scenario
+                const hasAccess = await verifyScenarioAccess(id, userId, "editor");
+                if (!hasAccess) {
                     throw new Error("FORBIDDEN");
                 }
 
@@ -120,6 +136,7 @@ export const GET = withAuth(async (request, { userId }) => {
     try {
         const { searchParams } = new URL(request.url);
         const scenarioIdParam = searchParams.get("id");
+        const projectIdParam = searchParams.get("projectId");
 
         // Validate scenarioId if provided
         let scenarioId: string | null = null;
@@ -135,8 +152,22 @@ export const GET = withAuth(async (request, { userId }) => {
             scenarioId = validation.data;
         }
 
+        // Validate projectId if provided
+        let projectId: string | null = null;
+        if (projectIdParam) {
+            const validation = validateInput(
+                projectIdParam,
+                z.string(),
+                "Invalid project ID",
+            );
+            if (!validation.success) {
+                return validation.errorResponse;
+            }
+            projectId = validation.data;
+        }
+
         if (scenarioId) {
-            // Get specific scenario for this user
+            // Get specific scenario
             const scenarioDoc = await firestore
                 .collection("scenarios")
                 .doc(scenarioId)
@@ -146,28 +177,42 @@ export const GET = withAuth(async (request, { userId }) => {
                 return notFoundResponse("Scenario not found");
             }
 
-            const scenarioData = scenarioDoc.data();
-
-            // Verify ownership
-            if (scenarioData?.userId !== userId) {
-                // Return 404 to avoid leaking existence of other users' scenarios, or 403 if preferred.
-                // Using notFoundResponse to mimic the previous query behavior (which wouldn't find it).
+            // Verify access (legacy user owner OR project viewer)
+            const hasAccess = await verifyScenarioAccess(scenarioId, userId, "viewer");
+            if (!hasAccess) {
                 return notFoundResponse("Scenario not found");
             }
 
             return successResponse({
                 id: scenarioId,
-                ...scenarioData,
+                ...scenarioDoc.data(),
             });
         } else {
-            // Get all scenarios for user
-            const scenariosRef = firestore
-                .collection("scenarios")
-                .where("userId", "==", userId)
-                .orderBy("updatedAt", "desc");
+            let scenariosSnapshot;
 
-            const scenariosSnapshot = await scenariosRef.get();
-            const scenarios = scenariosSnapshot.docs.map((doc) => ({
+            if (projectId) {
+                // Verify project access
+                const hasAccess = await verifyProjectAccess(projectId, userId, "viewer");
+                if (!hasAccess) {
+                    return forbiddenResponse("You do not have access to this project's scenarios.");
+                }
+
+                // Get all scenarios for project
+                scenariosSnapshot = await firestore
+                    .collection("scenarios")
+                    .where("projectId", "==", projectId)
+                    .orderBy("updatedAt", "desc")
+                    .get();
+            } else {
+                // Get all scenarios for legacy user fallback
+                scenariosSnapshot = await firestore
+                    .collection("scenarios")
+                    .where("userId", "==", userId)
+                    .orderBy("updatedAt", "desc")
+                    .get();
+            }
+
+            const scenarios = scenariosSnapshot.docs.map((doc: any) => ({
                 id: doc.id,
                 ...doc.data(),
             }));
@@ -208,17 +253,16 @@ export const DELETE = withAuth(async (request, { userId }) => {
 
         // Use a transaction to atomically verify ownership and delete both scenario and timeline
         try {
-            await firestore.runTransaction(async (transaction) => {
+            await firestore.runTransaction(async (transaction: any) => {
                 const scenarioDoc = await transaction.get(scenarioRef);
 
                 if (!scenarioDoc.exists) {
                     throw new Error("NOT_FOUND");
                 }
 
-                const scenarioData = scenarioDoc.data();
-
-                // Check if user owns this scenario
-                if (scenarioData?.userId !== userId) {
+                // Check if user has editor access to this scenario
+                const hasAccess = await verifyScenarioAccess(scenarioId, userId, "editor");
+                if (!hasAccess) {
                     throw new Error("FORBIDDEN");
                 }
 

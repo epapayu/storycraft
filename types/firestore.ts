@@ -14,15 +14,28 @@ export interface FirestoreUser {
     photoURL: string;
 }
 
+export interface FirestoreProject {
+    id: string;
+    name: string;
+    createdAt: FirestoreTimestamp;
+    updatedAt: FirestoreTimestamp;
+    ownerId: string;
+    members: Record<string, "owner" | "editor" | "viewer">; // Map of userId -> role
+}
+
 export interface FirestoreScenario extends Scenario {
     id: string;
-    userId: string;
+    projectId: string;
+    createdBy: string;
+    userId?: string; // For backwards compatibility
     createdAt: FirestoreTimestamp;
     updatedAt: FirestoreTimestamp;
 }
 
 export interface FirestoreTimelineState extends TimelineState {
-    userId: string;
+    projectId: string;
+    userId?: string; // For backwards compatibility
     createdAt: FirestoreTimestamp;
     updatedAt: FirestoreTimestamp;
 }
+

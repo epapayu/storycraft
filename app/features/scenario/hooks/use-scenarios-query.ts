@@ -18,11 +18,14 @@ export type ScenarioWithId = Scenario & {
     createdAt?: FirestoreTimestamp;
 };
 
-export function useScenarios() {
+export function useScenarios(projectId?: string | null) {
     return useQuery({
-        queryKey: SCENARIO_KEYS.lists(),
+        queryKey: [...SCENARIO_KEYS.lists(), projectId || "legacy"],
         queryFn: async () => {
-            const response = await fetch("/api/scenarios");
+            const url = projectId
+                ? `/api/scenarios?projectId=${projectId}`
+                : "/api/scenarios";
+            const response = await fetch(url);
             if (!response.ok) {
                 throw new Error("Failed to fetch scenarios");
             }
@@ -58,7 +61,7 @@ export function useScenarioById(id: string | null) {
     });
 }
 
-export function useSaveScenarioMutation() {
+export function useSaveScenarioMutation(projectId?: string | null) {
     const queryClient = useQueryClient();
 
     return useMutation({
@@ -77,6 +80,7 @@ export function useSaveScenarioMutation() {
                 body: JSON.stringify({
                     scenario,
                     scenarioId,
+                    projectId: projectId || undefined,
                 }),
             });
 

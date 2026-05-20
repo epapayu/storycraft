@@ -11,6 +11,7 @@ import {
     ScenarioWithId,
 } from "./use-scenarios-query";
 import { useQueryClient } from "@tanstack/react-query";
+import { useProjectStore } from "@/app/features/shared/stores/useProjectStore";
 import { useScenarioStore } from "../stores/useScenarioStore";
 
 export function useScenario() {
@@ -18,15 +19,16 @@ export function useScenario() {
     const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const setField = useScenarioStore((state) => state.setField);
     const queryClient = useQueryClient();
+    const activeProjectId = useProjectStore((state) => state.activeProjectId);
 
-    const saveMutation = useSaveScenarioMutation();
+    const saveMutation = useSaveScenarioMutation(activeProjectId);
     const deleteMutation = useDeleteScenarioMutation();
     const {
         data: scenarios = [] as ScenarioWithId[],
         refetch: refetchScenarios,
         isLoading,
         error,
-    } = useScenarios();
+    } = useScenarios(activeProjectId);
 
     const saveScenario = useCallback(
         async (scenario: Scenario, scenarioId?: string) => {

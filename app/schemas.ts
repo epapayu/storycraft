@@ -212,7 +212,9 @@ export const idSchema = z.string().min(1);
 export const scenarioApiPostSchema = z.object({
     scenario: scenarioSchema,
     scenarioId: z.string().optional(),
+    projectId: z.string().optional(),
 });
+
 
 export const videoApiPostSchema = z.object({
     scenes: z.array(sceneSchema),
@@ -245,6 +247,18 @@ export const timelineApiPostSchema = z.object({
     scenarioId: z.string().min(1),
     layers: z.array(timelineLayerSchema),
 });
+
+export const projectApiPostSchema = z.object({
+    name: z.string().min(1).max(100),
+});
+
+export const projectMemberPutSchema = z.object({
+    projectId: z.string().min(1),
+    email: z.string().email(),
+    role: z.enum(["owner", "editor", "viewer"]),
+});
+
+
 
 // Modify Scenario Schemas
 export const deleteCharacterSchema = z.object({

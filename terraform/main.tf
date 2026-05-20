@@ -150,6 +150,64 @@ resource "google_firestore_index" "scenarios_index" {
   depends_on = [google_firestore_database.storycraft_db]
 }
 
+# Create composite index for scenarios collection (projectId)
+resource "google_firestore_index" "scenarios_project_index" {
+  project    = var.project_id
+  database   = google_firestore_database.storycraft_db.name
+  collection = "scenarios"
+
+  fields {
+    field_path = "projectId"
+    order      = "ASCENDING"
+  }
+
+  fields {
+    field_path = "updatedAt"
+    order      = "DESCENDING"
+  }
+
+  depends_on = [google_firestore_database.storycraft_db]
+}
+
+# Create composite index for timelines collection (userId)
+resource "google_firestore_index" "timelines_index" {
+  project    = var.project_id
+  database   = google_firestore_database.storycraft_db.name
+  collection = "timelines"
+
+  fields {
+    field_path = "userId"
+    order      = "ASCENDING"
+  }
+
+  fields {
+    field_path = "scenarioId"
+    order      = "ASCENDING"
+  }
+
+  depends_on = [google_firestore_database.storycraft_db]
+}
+
+# Create composite index for timelines collection (projectId)
+resource "google_firestore_index" "timelines_project_index" {
+  project    = var.project_id
+  database   = google_firestore_database.storycraft_db.name
+  collection = "timelines"
+
+  fields {
+    field_path = "projectId"
+    order      = "ASCENDING"
+  }
+
+  fields {
+    field_path = "scenarioId"
+    order      = "ASCENDING"
+  }
+
+  depends_on = [google_firestore_database.storycraft_db]
+}
+
+
 # Create Artifact Registry repository for container images
 resource "google_artifact_registry_repository" "storycraft_repo" {
   location      = var.region
@@ -180,10 +238,33 @@ locals {
 }
 
 
+# Grant Storage Object Viewer to the default Compute Engine service account for Cloud Build
+resource "google_project_iam_member" "cloudbuild_default_sa_storage" {
+  project = var.project_id
+  role    = "roles/storage.objectViewer"
+  member  = "serviceAccount:${local.project_number}-compute@developer.gserviceaccount.com"
+
+  depends_on = [google_project_service.apis]
+}
+
+# Grant Artifact Registry Writer to the default Compute Engine service account for Cloud Build
+resource "google_project_iam_member" "cloudbuild_default_sa_registry" {
+  project = var.project_id
+  role    = "roles/artifactregistry.writer"
+  member  = "serviceAccount:${local.project_number}-compute@developer.gserviceaccount.com"
+
+  depends_on = [google_project_service.apis]
+}
+
+
 # --- Docker Build and Push ---
-# This null_resource executes local shell commands to build and push the Docker image.
+# This null_resource executes Google Cloud Build to compile and push the Docker image, bypassing local Docker daemon dependencies.
 resource "null_resource" "docker_build_and_push" {
-  depends_on = [google_artifact_registry_repository.storycraft_repo]
+  depends_on = [
+    google_artifact_registry_repository.storycraft_repo,
+    google_project_iam_member.cloudbuild_default_sa_storage,
+    google_project_iam_member.cloudbuild_default_sa_registry
+  ]
 
   triggers = {
     # CRITICAL: The resource only runs (and thus builds/pushes) when the image content hash changes.
@@ -192,14 +273,8 @@ resource "null_resource" "docker_build_and_push" {
 
   provisioner "local-exec" {
     command = <<-EOT
-      # 1. Authenticate Docker CLI to Artifact Registry
-      gcloud auth configure-docker ${local.ar_registry_host} --quiet
-
-      # 2. Build the Docker image with the content-based tag
-      docker build -t "${local.full_image_path}" ../
-
-      # 3. Push the unique image to Artifact Registry
-      docker push "${local.full_image_path}"
+      # Trigger Google Cloud Build in GCP to build and push the image
+      gcloud builds submit --tag "${local.full_image_path}" --project=${var.project_id} ../
     EOT
 
     interpreter = ["/bin/bash", "-c"]

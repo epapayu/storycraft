@@ -3,7 +3,7 @@ import { POST, PUT } from "@/app/api/regenerate-image/route";
 import { NextRequest } from "next/server";
 import { auth } from "@/auth";
 import * as imageGen from "@/app/features/shared/actions/image-generation";
-import { verifyScenarioOwnership } from "@/lib/api/ownership";
+import { verifyScenarioAccess } from "@/lib/api/ownership";
 
 vi.mock("@/auth", () => ({
     auth: vi.fn(),
@@ -14,7 +14,7 @@ vi.mock("@/app/features/shared/actions/image-generation", () => ({
 }));
 
 vi.mock("@/lib/api/ownership", () => ({
-    verifyScenarioOwnership: vi.fn(),
+    verifyScenarioAccess: vi.fn(),
 }));
 
 vi.mock("@/app/logger", () => ({
@@ -34,11 +34,12 @@ describe("regenerate-image API integration", () => {
             success: true,
             imageGcsUri: "gs://bucket/mock-regen-image.png",
         });
-        (verifyScenarioOwnership as Mock).mockResolvedValue(true);
+        (verifyScenarioAccess as Mock).mockResolvedValue(true);
     });
 
     it("POST should return 403 when user does not own the scenario", async () => {
-        (verifyScenarioOwnership as Mock).mockResolvedValue(false);
+        (verifyScenarioAccess as Mock).mockResolvedValue(false);
+
 
         const body = {
             prompt: {

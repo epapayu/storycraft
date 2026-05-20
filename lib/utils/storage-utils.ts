@@ -7,9 +7,10 @@ import logger from "@/app/logger";
  * and the provided filename.
  *
  * @param fileName The name of the file to be stored.
+ * @param projectId Optional ID of the project to partition directory path.
  * @returns An object containing the bucket name and the destination path.
  */
-export function getGcsDestination(fileName: string): {
+export function getGcsDestination(fileName: string, projectId?: string): {
     bucketName: string;
     destinationPath: string;
 } {
@@ -17,6 +18,10 @@ export function getGcsDestination(fileName: string): {
     const bucketName = gcsUri.replace("gs://", "").split("/")[0];
     let basePath = gcsUri.replace(`gs://${bucketName}`, "");
     if (basePath.startsWith("/")) basePath = basePath.substring(1);
+
+    if (projectId) {
+        basePath = path.join(basePath, projectId);
+    }
 
     const destinationPath = path.join(basePath, fileName);
     return { bucketName, destinationPath };
@@ -28,15 +33,17 @@ export function getGcsDestination(fileName: string): {
  * @param buffer The file content as a Buffer.
  * @param fileName The name of the file to be stored.
  * @param contentType The MIME type of the file.
+ * @param projectId Optional ID of the project to partition directory path.
  * @returns The GCS URI of the uploaded file.
  */
 export async function uploadBufferToGcs(
     buffer: Buffer,
     fileName: string,
     contentType: string,
+    projectId?: string,
 ): Promise<string> {
     logger.debug(`Uploading ${fileName} to GCS...`);
-    const { bucketName, destinationPath } = getGcsDestination(fileName);
+    const { bucketName, destinationPath } = getGcsDestination(fileName, projectId);
     const bucket = storage.bucket(bucketName);
     const file = bucket.file(destinationPath);
 

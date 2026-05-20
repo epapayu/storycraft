@@ -12,7 +12,7 @@ import {
     forbiddenResponse,
     errorResponse,
 } from "@/lib/api/response";
-import { verifyScenarioOwnership } from "@/lib/api/ownership";
+import { verifyScenarioAccess } from "@/lib/api/ownership";
 import { withAuth } from "@/lib/api/with-auth";
 import { validateInput } from "@/lib/utils/validation";
 
@@ -63,11 +63,12 @@ export const POST = withAuth(async (req, { userId }) => {
 
         // Verify ownership if scenario has an ID
         if (scenario.id) {
-            const isOwner = await verifyScenarioOwnership(scenario.id, userId);
-            if (!isOwner) {
+            const hasAccess = await verifyScenarioAccess(scenario.id, userId, "editor");
+            if (!hasAccess) {
                 return forbiddenResponse();
             }
         }
+
 
         logger.debug("Generating videos in parallel...");
         logger.debug(`model: ${model}`);

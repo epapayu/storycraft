@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/select";
 import { memo } from "react";
 import { toast } from "sonner";
+import { ProjectSwitcher } from "./project-switcher";
 
 export const Sidebar = memo(function Sidebar() {
     const { settings, updateSettings } = useSettings();
@@ -113,7 +114,7 @@ export const Sidebar = memo(function Sidebar() {
                 isCollapsed ? "w-[70px]" : "w-[280px]",
             )}
         >
-            <div className="border-border flex h-16 items-center px-3 transition-all duration-300">
+            <div className="border-border flex h-16 items-center px-3 transition-all duration-300 gap-2">
                 {/* Toggle Button - Centered in Rail (46px zone) */}
                 <div className="flex w-[46px] shrink-0 justify-center">
                     <Button
@@ -127,6 +128,10 @@ export const Sidebar = memo(function Sidebar() {
                     >
                         <PanelLeft className="h-5 w-5" />
                     </Button>
+                </div>
+
+                <div className="flex-1 overflow-hidden">
+                    <ProjectSwitcher isCollapsed={isCollapsed} />
                 </div>
             </div>
 

@@ -9,6 +9,7 @@ import {
 } from "@/lib/api/response";
 import { withAuth } from "@/lib/api/with-auth";
 import { validateInput } from "@/lib/utils/validation";
+import { verifyScenarioAccess } from "@/lib/api/ownership";
 
 // Save or update timeline state
 export const POST = withAuth(async (request, { userId }) => {
@@ -23,26 +24,36 @@ export const POST = withAuth(async (request, { userId }) => {
 
         const { scenarioId, layers } = validation.data;
 
+        // Verify access to the parent scenario before writing
+        const hasAccess = await verifyScenarioAccess(scenarioId, userId, "editor");
+        if (!hasAccess) {
+            return forbiddenResponse("Forbidden: You do not have editor access to this scenario.");
+        }
+
         // Use scenarioId as the timeline document ID (1:1 relationship)
         const timelineRef = firestore.collection("timelines").doc(scenarioId);
+        const scenarioRef = firestore.collection("scenarios").doc(scenarioId);
 
-        await firestore.runTransaction(async (transaction) => {
+        await firestore.runTransaction(async (transaction: any) => {
             const existingDoc = await transaction.get(timelineRef);
+            const scenarioDoc = await transaction.get(scenarioRef);
+            const scenarioData = scenarioDoc.data();
 
-            const timelineData = {
+            const timelineData: Record<string, any> = {
                 id: scenarioId,
                 scenarioId,
-                userId,
                 layers,
                 updatedAt: new Date(),
             };
 
+            // Backwards compatibility mapping
+            if (scenarioData?.projectId) {
+                timelineData.projectId = scenarioData.projectId;
+            } else {
+                timelineData.userId = userId;
+            }
+
             if (existingDoc.exists) {
-                // Verify ownership before updating
-                const existingData = existingDoc.data();
-                if (existingData?.userId !== userId) {
-                    throw new Error("FORBIDDEN");
-                }
                 transaction.update(timelineRef, timelineData);
             } else {
                 transaction.set(timelineRef, {
@@ -54,9 +65,6 @@ export const POST = withAuth(async (request, { userId }) => {
 
         return successResponse({ timelineId: scenarioId });
     } catch (error) {
-        if (error instanceof Error && error.message === "FORBIDDEN") {
-            return forbiddenResponse();
-        }
         logger.error(`Error saving timeline: ${error}`);
         return errorResponse("Failed to save timeline", "SAVE_TIMELINE_ERROR");
     }
@@ -95,14 +103,14 @@ export const GET = withAuth(async (request, { userId }) => {
             return successResponse({ timeline: null });
         }
 
-        const data = timelineDoc.data();
-
-        if (data?.userId !== userId) {
-            // Treat as not found/null for security
+        // Verify viewer access to parent scenario
+        const hasAccess = await verifyScenarioAccess(scenarioId, userId, "viewer");
+        if (!hasAccess) {
+            // Treat as not found for safety
             return successResponse({ timeline: null });
         }
 
-        return successResponse({ timeline: data });
+        return successResponse({ timeline: timelineDoc.data() });
     } catch (error) {
         logger.error(`Error loading timeline: ${error}`);
         return errorResponse("Failed to load timeline", "LOAD_TIMELINE_ERROR");
@@ -133,28 +141,24 @@ export const DELETE = withAuth(async (request, { userId }) => {
         }
         const scenarioId = validation.data;
 
+        // Verify editor access to scenario
+        const hasAccess = await verifyScenarioAccess(scenarioId, userId, "editor");
+        if (!hasAccess) {
+            return forbiddenResponse("Forbidden: You do not have editor access to this scenario.");
+        }
+
         const timelineRef = firestore.collection("timelines").doc(scenarioId);
 
-        await firestore.runTransaction(async (transaction) => {
+        await firestore.runTransaction(async (transaction: any) => {
             const timelineDoc = await transaction.get(timelineRef);
 
             if (timelineDoc.exists) {
-                const data = timelineDoc.data();
-
-                // Verify ownership before deleting
-                if (data?.userId !== userId) {
-                    throw new Error("FORBIDDEN");
-                }
-
                 transaction.delete(timelineRef);
             }
         });
 
         return successResponse({ success: true });
     } catch (error) {
-        if (error instanceof Error && error.message === "FORBIDDEN") {
-            return forbiddenResponse();
-        }
         logger.error(`Error deleting timeline: ${error}`);
         return errorResponse(
             "Failed to delete timeline",

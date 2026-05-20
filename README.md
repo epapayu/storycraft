@@ -64,13 +64,25 @@ storycraft/
 - [`lib/`](lib/) - Core utilities including FFmpeg video processing, Google Cloud integrations, and AI model wrappers
 - [`public/music/`](public/music/) - Curated background music library organized by mood and genre
 
+## Features & Software Updates
+
+*   **Workspace Collaboration & RBAC:** Multiple users can collaborate inside projects, governed by Owner, Editor, and Viewer permissions. The UI includes an **Invite Team Member** dialog to seamlessly share projects with colleagues.
+*   **Tenant Path Namespacing:** Media assets (images, videos, audio) generated for different projects are cleanly isolated inside partitioned Google Cloud Storage directories (`gs://bucket/<projectId>/media/`).
+*   **Firestore Dynamic Sorting:** Fixed database indexing query bottlenecks to enable fast, in-memory sorting of project lists.
+
 ## Deployment
 
-StoryCraft can be deployed to [Google Cloud Run](https://cloud.google.com/run/docs/quickstarts/frameworks/deploy-nextjs-service) for scalable, serverless hosting. The application includes a `Dockerfile` for containerization and is optimized for Cloud Run's execution environment. To deploy:
+StoryCraft features a fully automated, robust **Terraform deployment pipeline**. It provisions all necessary infrastructure (enabled APIs, databases, storage buckets, composite indexes, and IAM service accounts) and triggers **Google Cloud Build** to compile and push the container image to Artifact Registry. 
 
-1. Ensure you have the [Google Cloud CLI](https://cloud.google.com/sdk/docs/install) installed and configured
-2. Set up your Google Cloud project with the required APIs enabled (Vertex AI, Cloud Storage, Text-to-Speech)
-3. Configure environment variables for your AI model endpoints and storage buckets
-4. Deploy using the command: `gcloud run deploy --source .`
+**This completely eliminates any local Docker daemon dependency!**
 
-The application will automatically scale based on demand and only incur costs when actively processing video generation requests.
+To deploy, configure your `terraform/terraform.tfvars` credentials and run:
+
+```bash
+cd terraform
+terraform init
+terraform apply
+```
+
+For detailed deployment guidelines and software update instructions, refer to the **[deploy-instructions.md](deploy-instructions.md)** file.
+

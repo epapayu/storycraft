@@ -74,7 +74,7 @@ export const DEFAULT_SETTINGS: Settings = {
     llmModel: "gemini-3-flash-preview",
     thinkingBudget: 0,
     imageModel: "gemini-3.1-flash-image-preview",
-    videoModel: "veo-3.0-lite-generate-001",
+    videoModel: "veo-3.1-lite-generate-001",
     videoResolution: "1080p",
     generateAudio: false,
 };
